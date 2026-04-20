@@ -14,18 +14,38 @@ export interface PMTilesBlob {
 	blob: Blob;
 }
 
+export interface Options {
+	logLevel?: string
+}
+
+const logLevel = ['debug', 'warn', 'error', 'silent']
+enum LogLevel {
+  Debug = 0,
+  Warn = 1,
+  Error = 2,
+  Silent = 3
+}
+
 export class IndexedDBSource implements OfflineSource {
 	public db: IDBDatabase;
 	public filename: string;
 	public tablename: string;
+	public logLevel: LogLevel = LogLevel.Debug;
 	constructor(
 		db: IDBDatabase,
 		filename: string,
 		tablename = "offline-pmtiles",
+		options: Options = { logLevel: 'debug' }
 	) {
 		this.filename = filename;
 		this.db = db;
 		this.tablename = tablename;
+		const logLevelNum = options.logLevel
+		  ? logLevel.indexOf(options.logLevel)
+			: -1
+		if (logLevelNum != -1) {
+		  this.logLevel = logLevelNum
+		}
 	}
 
 	public static openDb(
@@ -61,10 +81,12 @@ export class IndexedDBSource implements OfflineSource {
 			const request = store.get(key);
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => {
-				console.info(
-					`error retrieving ${key} from ${this.tablename} in IndexedDB.`,
-					request.error,
-				);
+			  if (this.logLevel <= LogLevel.Warn) {
+  				console.info(
+  					`error retrieving ${key} from ${this.tablename} in IndexedDB.`,
+  					request.error,
+  				);
+				}
 				resolve(undefined);
 			};
 		});
@@ -73,9 +95,11 @@ export class IndexedDBSource implements OfflineSource {
 	async getAndSliceBlob(start: number, end: number): Promise<Blob | undefined> {
 		const startTime = performance.now();
 		const byteRange = end - start;
-		console.debug(
-			`[IndexedDB] Starting retrieval: range=${start}-${end} (${byteRange} bytes)`,
-		);
+		if (this.logLevel <= LogLevel.Debug) {
+  		console.debug(
+  			`[IndexedDB] Starting retrieval: range=${start}-${end} (${byteRange} bytes)`,
+  		);
+		}
 
 		const tx = this.db.transaction(this.tablename, "readonly");
 		const store = tx.objectStore(this.tablename);
@@ -87,35 +111,43 @@ export class IndexedDBSource implements OfflineSource {
 				const res = request.result as PMTilesBlob | undefined;
 				if (res?.blob) {
 					const slicedBlob = res.blob.slice(start, end);
-					const elapsed = performance.now() - startTime;
-					console.debug(
-						`[IndexedDB] Retrieved and sliced blob: range=${start}-${end} (${byteRange} bytes) in ${elapsed.toFixed(2)}ms`,
-					);
+					if (this.logLevel <= LogLevel.Debug) {
+  					const elapsed = performance.now() - startTime;
+  					console.debug(
+  						`[IndexedDB] Retrieved and sliced blob: range=${start}-${end} (${byteRange} bytes) in ${elapsed.toFixed(2)}ms`,
+  					);
+					}
 					resolve(slicedBlob);
 				} else {
-					const elapsed = performance.now() - startTime;
-					console.debug(
-						`[IndexedDB] No blob found: range=${start}-${end} in ${elapsed.toFixed(2)}ms`,
-					);
+				  if (this.logLevel <= LogLevel.Debug) {
+						const elapsed = performance.now() - startTime;
+  					console.debug(
+  						`[IndexedDB] No blob found: range=${start}-${end} in ${elapsed.toFixed(2)}ms`,
+  					);
+					}
 					resolve(undefined);
 				}
 			};
 
 			request.onerror = () => {
-				const elapsed = performance.now() - startTime;
-				console.error(
-					`[IndexedDB] Error getting blob from IndexedDB after ${elapsed.toFixed(2)}ms:`,
-					request.error,
-				);
+			  if (this.logLevel <= LogLevel.Error) {
+  				const elapsed = performance.now() - startTime;
+  				console.error(
+  					`[IndexedDB] Error getting blob from IndexedDB after ${elapsed.toFixed(2)}ms:`,
+  					request.error,
+  				);
+				}
 				resolve(undefined);
 			};
 
 			tx.onerror = () => {
-				const elapsed = performance.now() - startTime;
-				console.error(
-					`[IndexedDB] Transaction error after ${elapsed.toFixed(2)}ms:`,
-					tx.error,
-				);
+			  if (this.logLevel <= LogLevel.Error) {
+  				const elapsed = performance.now() - startTime;
+  				console.error(
+  					`[IndexedDB] Transaction error after ${elapsed.toFixed(2)}ms:`,
+  					tx.error,
+  				);
+				}
 				reject(tx.error);
 			};
 		});
@@ -131,10 +163,12 @@ export class IndexedDBSource implements OfflineSource {
 				resolve(res?.blob !== undefined);
 			};
 			request.onerror = () => {
-				console.error(
-					`Error checking if ${this.filename} exists in IndexedDB:`,
-					request.error,
-				);
+  			if (this.logLevel <= LogLevel.Error) {
+  				console.error(
+  					`Error checking if ${this.filename} exists in IndexedDB:`,
+  					request.error,
+  				);
+  			}
 				resolve(false);
 			};
 		});
@@ -181,9 +215,11 @@ export class IndexedDBSource implements OfflineSource {
 			request.onsuccess = () => resolve(undefined);
 			request.onerror = () => reject(request.error);
 			request.onblocked = () => {
-				console.warn(
-					`Deletion of database ${dbname} is blocked. Close all connections to proceed.`,
-				);
+			  if (this.logLevel <= LogLevel.Warn) {
+  				console.warn(
+  					`Deletion of database ${dbname} is blocked. Close all connections to proceed.`,
+  				);
+				}
 			};
 		});
 	}

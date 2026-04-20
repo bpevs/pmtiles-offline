@@ -124,6 +124,7 @@ new IndexedDBSource(db: IDBDatabase, filename: string, tablename?: string)
 - `db`: An opened IndexedDB database
 - `filename`: The name/key for the PMTiles file
 - `tablename`: The object store name (default: "offline-pmtiles")
+- `options.logLevel`: A string that controls what logs from pm-tiles offline ('debug' | 'warn' | 'error' | 'silent')
 
 #### Static Methods
 
